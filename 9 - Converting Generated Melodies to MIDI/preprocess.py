@@ -2,13 +2,16 @@ import os
 import json
 import music21 as m21
 import numpy as np
-import tensorflow.keras as keras
+import tensorflow
+
+keras = tensorflow.keras
 
 KERN_DATASET_PATH = "deutschl/erk"
 SAVE_DIR = "dataset"
 SINGLE_FILE_DATASET = "file_dataset"
 MAPPING_PATH = "mapping.json"
 SEQUENCE_LENGTH = 64
+BAR_LENGTH = 16
 
 # durations are expressed in quarter length
 ACCEPTABLE_DURATIONS = [
@@ -223,6 +226,19 @@ def convert_songs_to_int(songs):
 
     return int_songs
 
+def make_custom_onehot_mapping(sequence:list[int], startIndex:int, num_classes:int):
+    u = startIndex
+    newSequence:list[list[int]] = []
+    for idx, num in enumerate(sequence):
+        cat = [0] * num_classes
+        cat[num] = 1
+        if (idx + u) % BAR_LENGTH == 0:
+            for i in range(4):
+                cat.append(10 if ((idx + u) / BAR_LENGTH) % 4 == i else 0)
+        else:
+            cat += [0, 0, 0, 0]
+        newSequence.append(cat)
+    return newSequence
 
 def generate_training_sequences(sequence_length):
     """Create input and output data samples for training. Each sample is a sequence.
@@ -242,14 +258,14 @@ def generate_training_sequences(sequence_length):
 
     # generate the training sequences
     num_sequences = len(int_songs) - sequence_length
+    vocabulary_size = len(set(int_songs))
     for i in range(num_sequences):
-        inputs.append(int_songs[i:i+sequence_length])
+        # one-hot encode the sequences
+        inputs.append(make_custom_onehot_mapping(int_songs[i:i+sequence_length], i, vocabulary_size))
         targets.append(int_songs[i+sequence_length])
 
-    # one-hot encode the sequences
-    vocabulary_size = len(set(int_songs))
     # inputs size: (# of sequences, sequence length, vocabulary size)
-    inputs = keras.utils.to_categorical(inputs, num_classes=vocabulary_size)
+    inputs = np.array(inputs)
     targets = np.array(targets)
 
     print(f"There are {len(inputs)} sequences.")

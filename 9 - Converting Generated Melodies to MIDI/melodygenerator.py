@@ -1,8 +1,10 @@
 import json
 import numpy as np
-import tensorflow.keras as keras
+import tensorflow
 import music21 as m21
-from preprocess import SEQUENCE_LENGTH, MAPPING_PATH
+from preprocess import make_custom_onehot_mapping, SEQUENCE_LENGTH, MAPPING_PATH
+
+keras = tensorflow.keras
 
 class MelodyGenerator:
     """A class that wraps the LSTM model and offers utilities to generate melodies."""
@@ -41,11 +43,12 @@ class MelodyGenerator:
 
         for _ in range(num_steps):
 
-            # limit the seed to max_sequence_length
-            seed = seed[-max_sequence_length:]
-
             # one-hot encode the seed
-            onehot_seed = keras.utils.to_categorical(seed, num_classes=len(self._mappings))
+            onehot_seed = np.array(make_custom_onehot_mapping(
+                seed,
+                0,
+                num_classes=len(self._mappings)
+            ))
             # (1, max_sequence_length, num of symbols in the vocabulary)
             onehot_seed = onehot_seed[np.newaxis, ...]
 
@@ -59,7 +62,7 @@ class MelodyGenerator:
 
             # map int to our encoding
             output_symbol = [k for k, v in self._mappings.items() if v == output_int][0]
-
+            print(f"symbol: {output_symbol}")
             # check whether we're at the end of a melody
             if output_symbol == "/":
                 break
@@ -141,26 +144,6 @@ if __name__ == "__main__":
     mg = MelodyGenerator()
     seed = "67 _ 67 _ 67 _ _ 65 64 _ 64 _ 64 _ _"
     seed2 = "67 _ _ _ _ _ 65 _ 64 _ 62 _ 60 _ _ _"
-    melody = mg.generate_melody(seed, 500, SEQUENCE_LENGTH, 0.3)
+    melody = mg.generate_melody(seed, 200, SEQUENCE_LENGTH, 0.6)
     print(melody)
     mg.save_melody(melody)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
