@@ -66,4 +66,5 @@ def train(output_units=OUTPUT_UNITS, num_units=NUM_UNITS, loss=LOSS, learning_ra
 
 
 if __name__ == "__main__":
+    print(tensorflow.config.list_physical_devices('GPU'))
     train()
