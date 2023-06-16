@@ -51,11 +51,12 @@ def train(output_units=OUTPUT_UNITS, num_units=NUM_UNITS, loss=LOSS, learning_ra
     :param learning_rate (float): Learning rate to apply
     """
 
+    loadFromExist = input("Load model from existing? (Y/N)").lower() == "y"
     # generate the training sequences
     inputs, targets = generate_training_sequences(SEQUENCE_LENGTH)
 
     # build the network
-    model = keras.models.load_model('./model.h5')
+    model = keras.models.load_model('./model.h5') if loadFromExist else build_model(output_units, num_units, loss, learning_rate)
 
     # train the model# Create a callback that saves the model's weights
     cp_callback = keras.callbacks.ModelCheckpoint(filepath=SAVE_MODEL_PATH, verbose=1)
@@ -66,5 +67,4 @@ def train(output_units=OUTPUT_UNITS, num_units=NUM_UNITS, loss=LOSS, learning_ra
 
 
 if __name__ == "__main__":
-    print(tensorflow.config.list_physical_devices('GPU'))
     train()

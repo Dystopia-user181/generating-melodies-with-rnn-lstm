@@ -1,5 +1,6 @@
 import os
 import json
+import sys
 import music21 as m21
 import numpy as np
 import tensorflow
@@ -210,12 +211,12 @@ def create_mapping(songs, mapping_path):
         json.dump(mappings, fp, indent=4)
 
 
-def convert_songs_to_time_value_tup(songs):
+with open(MAPPING_PATH, "r") as fp:
+    mappings = json.load(fp)
+def convert_songs_to_int(songs):
     int_songs = []
 
     # load mappings
-    with open(MAPPING_PATH, "r") as fp:
-        mappings = json.load(fp)
 
     # transform songs string to list
     songs = songs.split()
@@ -223,11 +224,7 @@ def convert_songs_to_time_value_tup(songs):
     t = 0
     # map songs to int
     for symbol in songs:
-        int_songs.append((mappings[symbol], t))
-        if symbol == "/":
-            t = 0
-        else:
-            t += 1
+        int_songs.append(mappings[symbol])
 
     return int_songs
 
@@ -256,22 +253,32 @@ def generate_training_sequences(sequence_length):
 
     # load songs and map them to int
     songs = load(SINGLE_FILE_DATASET)
-    int_songs = convert_songs_to_time_value_tup(songs)
+    int_songs = convert_songs_to_int(songs)
 
     inputs = []
     targets = []
 
     # generate the training sequences
-    num_sequences = len(int_songs) - sequence_length
     vocabulary_size = len(set(int_songs))
-    for i in range(num_sequences):
-        # one-hot encode the sequences
-        inputs.append(make_custom_onehot_mapping(
-            map(lambda x: x[0], int_songs[i:i+sequence_length]),
-            int_songs[i][1],
-            vocabulary_size
-        ))
-        targets.append(int_songs[i+sequence_length][0])
+    for i in range(1700):
+        sys.stdout.write(f"\r{i + 1} out of 1700 completed")
+        sys.stdout.flush()
+        if not os.path.exists(os.path.join(os.getcwd(), "dataset", str(i))):
+            continue
+        with open(f"dataset/{i}", "r") as fp:
+            song = fp.read()
+        song += " /" * sequence_length
+        int_song = convert_songs_to_int(song)
+        num_sequences = len(int_song) - sequence_length
+        for j in range(num_sequences):
+            # one-hot encode the sequences
+            inputs.append(make_custom_onehot_mapping(
+                int_song[j:j+sequence_length],
+                j,
+                vocabulary_size
+            ))
+            targets.append(int_song[j+sequence_length])
+    print("Finished")
 
     # inputs size: (# of sequences, sequence length, vocabulary size)
     inputs = np.array(inputs)
