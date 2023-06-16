@@ -41,7 +41,7 @@ class MelodyGenerator:
         # map seed to int
         seed = [self._mappings[symbol] for symbol in seed]
 
-        for _ in range(num_steps):
+        for _ in range(num_steps + 100000):
 
             # one-hot encode the seed
             onehot_seed = np.array(make_custom_onehot_mapping(
@@ -54,6 +54,8 @@ class MelodyGenerator:
 
             # make a prediction
             probabilities = self.model.predict(onehot_seed)[0]
+            if _ < num_steps:
+                probabilities[self._mappings["/"]] = 0
             # [0.1, 0.2, 0.1, 0.6] -> 1
             output_int = self._sample_with_temperature(probabilities, temperature)
 
@@ -82,8 +84,8 @@ class MelodyGenerator:
 
         :return index (int): Selected output symbol
         """
-        predictions = np.log(probabilites) / temperature
-        probabilites = np.exp(predictions) / np.sum(np.exp(predictions))
+        predictions = np.power(probabilites, 1 / temperature)
+        probabilites = predictions / np.sum(predictions)
 
         choices = range(len(probabilites)) # [0, 1, 2, 3]
         index = np.random.choice(choices, p=probabilites)
@@ -144,6 +146,6 @@ if __name__ == "__main__":
     mg = MelodyGenerator()
     seed = "67 _ 67 _ 67 _ _ 65 64 _ 64 _ 64 _ _"
     seed2 = "67 _ _ _ _ _ 65 _ 64 _ 62 _ 60 _ _ _"
-    melody = mg.generate_melody(seed, 200, SEQUENCE_LENGTH, 1.0)
+    melody = mg.generate_melody(seed, 128, SEQUENCE_LENGTH, 1.2)
     print(melody)
     mg.save_melody(melody)
