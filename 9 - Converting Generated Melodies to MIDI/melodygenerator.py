@@ -6,6 +6,18 @@ from preprocess import make_custom_onehot_mapping, SEQUENCE_LENGTH, MAPPING_PATH
 
 keras = tensorflow.keras
 
+def convertNoteToInt(notes: list[str]):
+    noteOffset = {
+        "C": 0,
+        "D": 2,
+        "E": 4,
+        "F": 5,
+        "G": 7,
+        "A": 9,
+        "B": 11,
+    }
+    return list(map(lambda note: 12 * (int(note[1]) + 1) + noteOffset[note[0]], notes))
+
 class MelodyGenerator:
     """A class that wraps the LSTM model and offers utilities to generate melodies."""
 
@@ -94,50 +106,72 @@ class MelodyGenerator:
 
 
     def save_melody(self, melody, step_duration=0.25, format="midi", file_name="mel.mid"):
-        """Converts a melody into a MIDI file
+        chordList = list(map(lambda x: convertNoteToInt(x), [
+            ["C2", "E2", "G2"],
+            ["G2", "B2", "D3"],
+            ["D2", "F2", "A2"],
+            ["E2", "G2", "B2"],
+            ["F2", "A2", "C3"],
+            ["A1", "C2", "E2"],
+            ["B1", "D2", "F2"],
+        ]))
 
-        :param melody (list of str):
-        :param min_duration (float): Duration of each time step in quarter length
-        :param file_name (str): Name of midi file
-        :return:
-        """
+        noteTypesByBar = [ [0] ] * ((len(melody) + 15) // 16)
+        for i in range(len(noteTypesByBar)):
+            noteTypesByBar[i] = [0] * 12
 
         # create a music21 stream
         stream = m21.stream.Stream()
 
         start_symbol = None
+        start_time = 0
         step_counter = 1
 
-        # parse all the symbols in the melody and create note/rest objects
         for i, symbol in enumerate(melody):
-
             # handle case in which we have a note/rest
             if symbol != "_" or i + 1 == len(melody):
-
                 # ensure we're dealing with note/rest beyond the first one
                 if start_symbol is not None:
-
-                    quarter_length_duration = step_duration * step_counter # 0.25 * 4 = 1
+                    quarter_length_duration = step_duration * step_counter
 
                     # handle rest
                     if start_symbol == "r":
                         m21_event = m21.note.Rest(quarterLength=quarter_length_duration)
-
                     # handle note
                     else:
                         m21_event = m21.note.Note(int(start_symbol), quarterLength=quarter_length_duration)
+                        noteTypesByBar[start_time // 16][int(start_symbol) % 12] += 1
+                        if ((start_time + step_counter - 1) // 16 != start_time // 16):
+                            noteTypesByBar[(start_time + step_counter - 1) // 16][int(start_symbol) % 12] += 1
 
                     stream.append(m21_event)
-
-                    # reset the step counter
                     step_counter = 1
-
                 start_symbol = symbol
-
+                start_time = i
             # handle case in which we have a prolongation sign "_"
             else:
                 step_counter += 1
+        prev_chord = []
+        for i, noteTypes in enumerate(noteTypesByBar):
+            max_score = 0
+            choose_chord = [0, 0, 0]
+            for chord in chordList:
+                score = noteTypes[(chord[0] % 12)] * 1.2 + noteTypes[(chord[1] % 12)] + noteTypes[(chord[2] % 12)]
+                if prev_chord == chord:
+                    score -= 1
+                # If is I chord
+                if chord[0] % 12 == 0:
+                    if i % 4 == 0 or i % 4 == 3:
+                        score += 1
+                    else:
+                        score -= 1
 
+                if score > max_score:
+                    max_score = score
+                    choose_chord = chord
+            if max_score > 0:
+                stream.insert(i * 4.0, m21.chord.Chord(choose_chord, quarterLength=4))
+            prev_chord = choose_chord
         # write the m21 stream to a midi file
         stream.write(format, file_name)
 
@@ -146,6 +180,6 @@ if __name__ == "__main__":
     mg = MelodyGenerator()
     seed = "67 _ 67 _ 67 _ _ 65 64 _ 64 _ 64 _ _"
     seed2 = "67 _ _ _ _ _ 65 _ 64 _ 62 _ 60 _ _ _"
-    melody = mg.generate_melody(seed, 128, SEQUENCE_LENGTH, 1.2)
+    melody = mg.generate_melody(seed, 128, SEQUENCE_LENGTH, 1.0)
     print(melody)
     mg.save_melody(melody)
