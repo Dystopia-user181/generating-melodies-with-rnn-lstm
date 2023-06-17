@@ -238,7 +238,8 @@ def make_custom_onehot_mapping(sequence:list[int], startIndex:int, num_classes:i
             cat.append(1 if (idx + u) % 4 == i else 0)
         for i in range(4):
             cat.append(1 if ((idx + u) // 4) % 4 == i else 0)
-        cat.append(1 if (idx + u) % 16 == 0 else 0)
+        for i in range(4):
+            cat.append(1 if ((idx + u) // 16) % 4 == i else 0)
         newSequence.append(cat)
     return newSequence
 
@@ -261,9 +262,9 @@ def generate_training_sequences(sequence_length):
     # generate the training sequences
     vocabulary_size = len(set(int_songs))
     for i in range(1700):
-        sys.stdout.write(f"\r{i + 1} out of 1700 completed")
-        sys.stdout.flush()
         if not os.path.exists(os.path.join(os.getcwd(), "dataset", str(i))):
+            sys.stdout.write(f"\r{i + 1} out of 1700 songs compiled to training data")
+            sys.stdout.flush()
             continue
         with open(f"dataset/{i}", "r") as fp:
             song = fp.read()
@@ -278,6 +279,8 @@ def generate_training_sequences(sequence_length):
                 vocabulary_size
             ))
             targets.append(int_song[j+sequence_length])
+        sys.stdout.write(f"\r{i + 1} out of 1700 songs compiled to training data")
+        sys.stdout.flush()
     print("\nFinished")
 
     # inputs size: (# of sequences, sequence length, vocabulary size)

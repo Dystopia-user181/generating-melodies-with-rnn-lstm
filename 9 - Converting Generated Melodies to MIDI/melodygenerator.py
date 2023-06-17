@@ -53,6 +53,7 @@ class MelodyGenerator:
         # map seed to int
         seed = [self._mappings[symbol] for symbol in seed]
 
+        last_output_symbol = ""
         for _ in range(num_steps + 100000):
 
             # one-hot encode the seed
@@ -68,6 +69,8 @@ class MelodyGenerator:
             probabilities = self.model.predict(onehot_seed, verbose=0)[0]
             if _ < num_steps:
                 probabilities[self._mappings["/"]] = 0
+            if last_output_symbol != "":
+                probabilities[self._mappings[last_output_symbol]] *= 0.8
             # [0.1, 0.2, 0.1, 0.6] -> 1
             output_int = self._sample_with_temperature(probabilities, temperature)
 
@@ -80,6 +83,8 @@ class MelodyGenerator:
             # check whether we're at the end of a melody
             if output_symbol == "/":
                 break
+            elif output_symbol != "_":
+                last_output_symbol = output_symbol
 
             # update melody
             melody.append(output_symbol)
@@ -159,10 +164,12 @@ class MelodyGenerator:
                 score = noteTypes[(chord[0] % 12)] * 1.2 + noteTypes[(chord[1] % 12)] * 0.9 + noteTypes[(chord[2] % 12)]
                 # If is I chord
                 if chord[0] % 12 == 0:
-                    if i % 4 == 0 or i % 4 == 3:
+                    if i % 4 == 0 or i == len(noteTypesByBar) - 1:
                         score += 1
+                    elif i % 4 == 23:
+                        score -= 0.1
                     else:
-                        score -= 1
+                        score -= 0.9
                 elif prev_chord == chord:
                     score -= 1
 
@@ -180,7 +187,7 @@ class MelodyGenerator:
 
 if __name__ == "__main__":
     mg = MelodyGenerator()
-    seed = "67 _ 67 _ 67 _ _ 65 64 _ 64 _ 64 _ _"
+    seed = "67 _ 67 _ 67 _ _ 65 64 _ 64 _ 64 _ _ 62"
     seed2 = "67 _ _ _ _ _ 65 _ 64 _ 62 _ 60 _ _ _"
     melody = mg.generate_melody(seed, 128, SEQUENCE_LENGTH, 1.0)
     print(melody)
