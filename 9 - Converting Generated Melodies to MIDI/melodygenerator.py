@@ -65,7 +65,7 @@ class MelodyGenerator:
             onehot_seed = onehot_seed[np.newaxis, ...]
 
             # make a prediction
-            probabilities = self.model.predict(onehot_seed)[0]
+            probabilities = self.model.predict(onehot_seed, verbose=0)[0]
             if _ < num_steps:
                 probabilities[self._mappings["/"]] = 0
             # [0.1, 0.2, 0.1, 0.6] -> 1
@@ -156,21 +156,23 @@ class MelodyGenerator:
             max_score = 0
             choose_chord = [0, 0, 0]
             for chord in chordList:
-                score = noteTypes[(chord[0] % 12)] * 1.2 + noteTypes[(chord[1] % 12)] + noteTypes[(chord[2] % 12)]
-                if prev_chord == chord:
-                    score -= 1
+                score = noteTypes[(chord[0] % 12)] * 1.2 + noteTypes[(chord[1] % 12)] * 0.9 + noteTypes[(chord[2] % 12)]
                 # If is I chord
                 if chord[0] % 12 == 0:
                     if i % 4 == 0 or i % 4 == 3:
                         score += 1
                     else:
                         score -= 1
+                elif prev_chord == chord:
+                    score -= 1
 
                 if score > max_score:
                     max_score = score
                     choose_chord = chord
             if max_score > 0:
-                stream.insert(i * 4.0, m21.chord.Chord(choose_chord, quarterLength=4))
+                new_chord = m21.chord.Chord(choose_chord, quarterLength=4)
+                new_chord.volume = m21.volume.Volume(velocity=60)
+                stream.insert(i * 4.0, new_chord)
             prev_chord = choose_chord
         # write the m21 stream to a midi file
         stream.write(format, file_name)
