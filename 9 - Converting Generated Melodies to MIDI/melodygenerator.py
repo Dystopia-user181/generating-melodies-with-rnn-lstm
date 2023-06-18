@@ -1,4 +1,5 @@
 import json
+import random
 import sys
 import numpy as np
 import tensorflow
@@ -86,49 +87,63 @@ class MelodyGenerator:
         for symbol in seed:
             if self._inverse_mappings[symbol].isnumeric():
                 last_output_note = self._inverse_mappings[symbol]
+
         for _ in range(num_steps * 10):
             chord = self.chord_prog[(len(melody) // 16) % len(self.chord_prog)]
             onehot_seed = np.array(make_custom_onehot_mapping(
                 seed,
                 0,
                 num_classes=len(self._mappings)
+            ) if len(seed) < max_sequence_length else make_custom_onehot_mapping(
+                seed[-max_sequence_length:],
+                len(seed) - max_sequence_length,
+                num_classes=len(self._mappings)
             ))
             onehot_seed = onehot_seed[np.newaxis, ...]
 
             # make a prediction
             probabilities = self.model.predict(onehot_seed, verbose=0)[0]
+            probabilities[self._mappings["r"]] = 0
             # prevent early termination if less than desired range or not I chord
             if _ < num_steps or chord[0] % 12 != 0 or (len(melody) % 16) < 2:
                 probabilities[self._mappings["/"]] = 0
 
-            # change probabilities based on chord progression
-            for key, val in self._inverse_mappings.items():
-                if not val.isnumeric():
-                    continue
-                if is_partof_chord(chord, int(val)):
-                    probabilities[key] *= 2
-                else:
-                    probabilities[key] = 0
-                #elif not in_chord_range(chord, int(val)):
-                #    probabilities[key] *= 0.7
-
-            if last_output_note != "":
-                # fewer note repeats
-                probabilities[self._mappings[last_output_note]] *= repeat_penalty
-                # limit note jumps to major sixths at most
-                for key, val in self._inverse_mappings.items():
-                    if not val.isnumeric():
-                        continue
-                    if abs(int(val) - int(last_output_note)) > 7:
-                        probabilities[key] = 0
-            
-            # probabilities[self._mappings["_"]] *= 2
             # encourage prolongation if on half-beat, if after bar discourage
             if len(seed) % 2 == 1:
                 probabilities[self._mappings["_"]] *= 1.5
-            #elif len(seed) % 16 == 1:
-            #    probabilities[self._mappings["_"]] *= 0.9
-            output_int = self._sample_with_temperature(probabilities, temperature)
+            elif len(seed) % 16 == 0:
+                probabilities[self._mappings["_"]] *= 0.7
+            probabilities = np.power(probabilities, 1 / temperature)
+            probabilities = probabilities / np.sum(probabilities)
+            choices = range(len(probabilities)) # [0, 1, 2, 3]
+            choice = np.random.choice(choices, p=probabilities)
+            output_int = 0
+            if not self._inverse_mappings[choice].isnumeric():
+                output_int = choice
+            else:
+                probabilities[self._mappings["_"]] = 0
+                probabilities = np.power(probabilities, temperature)
+                # change probabilities based on chord progression
+                for key, val in self._inverse_mappings.items():
+                    if not val.isnumeric():
+                        continue
+                    if is_partof_chord(chord, int(val)):
+                        probabilities[key] *= 2
+                    elif not in_chord_range(chord, int(val)):
+                        probabilities[key] *= 0.5
+
+                if last_output_note != "":
+                    # fewer note repeats
+                    probabilities[self._mappings[last_output_note]] *= repeat_penalty
+                    # limit note jumps to major sixths at most
+                    for key, val in self._inverse_mappings.items():
+                        if not val.isnumeric():
+                            continue
+                        if abs(int(val) - int(last_output_note)) > 5:
+                            probabilities[key] = 0
+                probabilities = np.power(probabilities, 1 / temperature)
+                probabilities = probabilities / np.sum(probabilities)
+                output_int = np.random.choice(choices, p=probabilities)
 
             # update seed
             seed.append(output_int)
@@ -139,11 +154,12 @@ class MelodyGenerator:
             sys.stdout.flush()
             # check whether we're at the end of a melody
             if output_symbol == "/":
-                print("\n", chord, chord[0] % 12 != 0, (len(melody) // 16), len(self.chord_prog))
+                print()
+                print(chord, chord[0] % 12 != 0, (len(melody) // 16), len(self.chord_prog))
                 break
             elif output_symbol.isnumeric():
                 if output_symbol == last_output_note:
-                    repeat_penalty *= 0.5
+                    repeat_penalty *= 0.2
                 else:
                     repeat_penalty = 0.8
                 last_output_note = output_symbol
@@ -200,7 +216,11 @@ class MelodyGenerator:
                 step_counter += 1
         for i in range((len(melody) + 15) // 16):
             new_chord = m21.chord.Chord(self.chord_prog[i % len(self.chord_prog)], quarterLength=4)
-            new_chord.volume = m21.volume.Volume(velocity=60)
+            inversion = random.randint(0, 2)
+            new_chord.inversion(inversion)
+            if inversion == 2:
+                new_chord.transpose(-12)
+            new_chord.volume = m21.volume.Volume(velocity=50)
             stream.insert(i * 4.0, new_chord)
         # write the m21 stream to a midi file
         stream.write(format, file_name)
@@ -211,6 +231,6 @@ if __name__ == "__main__":
     mg.set_chord_prog([1, 5, 6, 4])
     seed = "67 _ 67 _ 67 _ _ 65 64 _ 64 _ 64 _ _ 62"
     seed2 = "67 _ _ _ _ _ 65 _ 64 _ 62 _ 60 _ _ _"
-    melody = mg.generate_melody(seed2, 128, SEQUENCE_LENGTH, 1.3)
+    melody = mg.generate_melody(seed, 128, SEQUENCE_LENGTH, 1.3)
     print(melody)
     mg.save_melody(melody)
