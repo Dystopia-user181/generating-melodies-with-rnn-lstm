@@ -135,3 +135,5 @@ dmypy.json
 .pyre/
 
 mel.mid
+9 - Converting Generated Melodies to MIDI/mel.mid
+*.mid
